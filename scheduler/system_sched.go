@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"fmt"
+	"github.com/davecgh/go-spew/spew"
 
 	log "github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-memdb"
@@ -276,11 +277,20 @@ func (s *SystemScheduler) computePlacements(place []allocTuple) error {
 		node, ok := nodeByID[missing.Alloc.NodeID]
 		if !ok {
 			s.logger.Debug("could not find node %q", missing.Alloc.NodeID)
-			if s.failedTGAllocs == nil {
-				s.failedTGAllocs = make(map[string]*structs.AllocMetric)
+			if s.queuedAllocs[missing.TaskGroup.Name] > 0 {
+				s.queuedAllocs[missing.TaskGroup.Name] -= 1
+				spew.Dump(s.queuedAllocs[missing.TaskGroup.Name])
 			}
 
-			s.failedTGAllocs[missing.TaskGroup.Name] = s.ctx.Metrics()
+			// If we are annotating the plan, then decrement the desired
+			// placements based on whether the node meets the constraints
+			if s.eval.AnnotatePlan && s.plan.Annotations != nil &&
+				s.plan.Annotations.DesiredTGUpdates != nil {
+				desired := s.plan.Annotations.DesiredTGUpdates[missing.TaskGroup.Name]
+				if desired.Place > 0 {
+					desired.Place -= 1
+				}
+			}
 			continue
 		}
 
