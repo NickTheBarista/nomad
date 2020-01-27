@@ -7,7 +7,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	memdb "github.com/hashicorp/go-memdb"
 	"github.com/hashicorp/nomad/helper"
 	"github.com/hashicorp/nomad/helper/uuid"
@@ -1349,8 +1348,6 @@ func TestSystemSched_JobConstraint_AddNode(t *testing.T) {
 	}
 
 	job.TaskGroups = []*structs.TaskGroup{tgA, tgB}
-
-	spew.Dump(job.TaskGroups)
 	require.Nil(t, h.State.UpsertJob(h.NextIndex(), job))
 
 	// Evaluate the job
@@ -1377,7 +1374,6 @@ func TestSystemSched_JobConstraint_AddNode(t *testing.T) {
 	require.Equal(t, 0, val)
 
 	// The plan has one NodeAllocations
-	spew.Dump(h.Plans)
 	require.Equal(t, 1, len(h.Plans))
 
 	// Mark the node as ineligible
@@ -1421,11 +1417,26 @@ func TestSystemSched_JobConstraint_AddNode(t *testing.T) {
 	require.Nil(t, h.Process(NewSystemScheduler, eval3))
 	require.Equal(t, "complete", h.Evals[2].Status)
 
+	// Ensure no failed TG allocs
 	require.Equal(t, 0, len(h.Evals[2].FailedTGAllocs))
+
+	ws := memdb.NewWatchSet()
+
+	allocsNodeOne, err := h.State.AllocsByNode(ws, node.ID)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(allocsNodeOne))
+
+	allocsNodeTwo, err := h.State.AllocsByNode(ws, nodeB.ID)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(allocsNodeTwo))
+
+	allocsNodeThree, err := h.State.AllocsByNode(ws, nodeBTwo.ID)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(allocsNodeThree))
 }
 
 // No errors reported when no available nodes prevent placement
-func TestSystemSched_NoNodes(t *testing.T) {
+func TestSystemSched_ExistingAllocNoNodes(t *testing.T) {
 	h := NewHarness(t)
 
 	var node *structs.Node
@@ -1481,13 +1492,15 @@ func TestSystemSched_NoNodes(t *testing.T) {
 	job2.Meta["version"] = "2"
 	require.Nil(t, h.State.UpsertJob(h.NextIndex(), job2))
 
+	// Run evaluation as a plan
 	eval3 := &structs.Evaluation{
-		Namespace:   structs.DefaultNamespace,
-		ID:          uuid.Generate(),
-		Priority:    job2.Priority,
-		TriggeredBy: structs.EvalTriggerJobRegister,
-		JobID:       job2.ID,
-		Status:      structs.EvalStatusPending,
+		Namespace:    structs.DefaultNamespace,
+		ID:           uuid.Generate(),
+		Priority:     job2.Priority,
+		TriggeredBy:  structs.EvalTriggerJobRegister,
+		JobID:        job2.ID,
+		Status:       structs.EvalStatusPending,
+		AnnotatePlan: true,
 	}
 
 	// Ensure New eval is complete
@@ -1495,9 +1508,9 @@ func TestSystemSched_NoNodes(t *testing.T) {
 	require.Nil(t, h.Process(NewSystemScheduler, eval3))
 	require.Equal(t, "complete", h.Evals[2].Status)
 
-	// Ensure there is a FailedTGAlloc metric
-	spew.Dump(h.Evals)
-	require.Equal(t, 1, len(h.Evals[2].FailedTGAllocs))
+	// Ensure there are no FailedTGAllocs
+	require.Equal(t, 0, len(h.Evals[2].FailedTGAllocs))
+	require.Equal(t, 0, h.Evals[2].QueuedAllocations[job2.Name])
 }
 
 // No errors reported when constraints prevent placement
