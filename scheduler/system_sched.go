@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"fmt"
+
 	log "github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/go-memdb"
 	"github.com/hashicorp/nomad/helper/uuid"
