@@ -1362,6 +1362,7 @@ func TestSystemSched_JobConstraint_AddNode(t *testing.T) {
 	}
 
 	require.Nil(t, h.State.UpsertEvals(h.NextIndex(), []*structs.Evaluation{eval}))
+	time.Sleep(1 * time.Second)
 	require.Nil(t, h.Process(NewSystemScheduler, eval))
 	require.Equal(t, "complete", h.Evals[0].Status)
 
@@ -1378,6 +1379,7 @@ func TestSystemSched_JobConstraint_AddNode(t *testing.T) {
 	require.Equal(t, 1, len(h.Plans))
 	require.Equal(t, 2, len(h.Plans[0].NodeAllocation))
 
+	time.Sleep(1 * time.Second)
 	// Mark the node as ineligible
 	node.SchedulingEligibility = structs.NodeSchedulingIneligible
 
@@ -1393,9 +1395,18 @@ func TestSystemSched_JobConstraint_AddNode(t *testing.T) {
 	}
 
 	require.Nil(t, h.State.UpsertEvals(h.NextIndex(), []*structs.Evaluation{eval2}))
+	time.Sleep(1 * time.Second)
 	require.Nil(t, h.Process(NewSystemScheduler, eval2))
 	require.Equal(t, "complete", h.Evals[1].Status)
-	require.Equal(t, 0, len(h.Plans))
+	// Ensure no new plans
+	time.Sleep(1 * time.Second)
+	require.Equal(t, 1, len(h.Plans))
+
+	// Ensure all NodeAllocations are from first Eval
+	for _, allocs := range h.Plans[0].NodeAllocation {
+		require.Equal(t, 1, len(allocs))
+		require.Equal(t, eval.ID, allocs[0].EvalID)
+	}
 
 	// Add a new node Class-B
 	var nodeBTwo *structs.Node
@@ -1422,6 +1433,14 @@ func TestSystemSched_JobConstraint_AddNode(t *testing.T) {
 
 	// Ensure no failed TG allocs
 	require.Equal(t, 0, len(h.Evals[2].FailedTGAllocs))
+
+	require.Equal(t, 2, len(h.Plans))
+	require.Equal(t, 1, len(h.Plans[1].NodeAllocation))
+	// Ensure all NodeAllocations are from first Eval
+	for _, allocs := range h.Plans[1].NodeAllocation {
+		require.Equal(t, 1, len(allocs))
+		require.Equal(t, eval3.ID, allocs[0].EvalID)
+	}
 
 	ws := memdb.NewWatchSet()
 
