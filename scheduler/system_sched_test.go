@@ -1313,7 +1313,7 @@ func TestSystemSched_Queued_With_Constraints(t *testing.T) {
 func TestSystemSched_JobConstraint_AddNode(t *testing.T) {
 	h := NewHarness(t)
 
-	// Create a node
+	// Create two nodes
 	var node *structs.Node
 	node = mock.Node()
 	node.ComputeClass()
@@ -1347,6 +1347,7 @@ func TestSystemSched_JobConstraint_AddNode(t *testing.T) {
 		},
 	}
 
+	// Upsert Job
 	job.TaskGroups = []*structs.TaskGroup{tgA, tgB}
 	require.Nil(t, h.State.UpsertJob(h.NextIndex(), job))
 
@@ -1373,8 +1374,9 @@ func TestSystemSched_JobConstraint_AddNode(t *testing.T) {
 	require.True(t, ok)
 	require.Equal(t, 0, val)
 
-	// The plan has one NodeAllocations
+	// The plan has two NodeAllocations
 	require.Equal(t, 1, len(h.Plans))
+	require.Equal(t, 2, len(h.Plans[0].NodeAllocation))
 
 	// Mark the node as ineligible
 	node.SchedulingEligibility = structs.NodeSchedulingIneligible
@@ -1393,6 +1395,7 @@ func TestSystemSched_JobConstraint_AddNode(t *testing.T) {
 	require.Nil(t, h.State.UpsertEvals(h.NextIndex(), []*structs.Evaluation{eval2}))
 	require.Nil(t, h.Process(NewSystemScheduler, eval2))
 	require.Equal(t, "complete", h.Evals[1].Status)
+	require.Equal(t, 0, len(h.Plans))
 
 	// Add a new node Class-B
 	var nodeBTwo *structs.Node
